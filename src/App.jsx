@@ -581,7 +581,7 @@ ${obsComite || '[Sin observaciones registradas]'}
     if (tipoApoyo.otros && tipoApoyo.otrosTexto) apoyos.push(tipoApoyo.otrosTexto);
 
     // Calcular puntos del radar chart
-    const cx = 150, cy = 150, radius = 110;
+    const cx = 220, cy = 200, radius = 110;
     const angleStep = (2 * Math.PI) / 7;
     const radarPoints = calculosPorCriterio.map((c, i) => {
       const angle = -Math.PI / 2 + i * angleStep;
@@ -590,11 +590,26 @@ ${obsComite || '[Sin observaciones registradas]'}
     });
     const radarPolygon = radarPoints.map(p => `${p.x},${p.y}`).join(' ');
 
-    // Etiquetas en el radar
+    // Nombres cortos para las etiquetas
+    const nombresCortos = [
+      ['Alineación', 'estratégica'],
+      ['Potencial de', 'impacto'],
+      ['Madurez de la', 'solución'],
+      ['Vinculación', 'con entorno'],
+      ['Viabilidad de', 'transferencia'],
+      ['Factibilidad', 'de ejecución'],
+      ['Equipo']
+    ];
+
+    // Etiquetas en el radar con posicionamiento inteligente
     const radarLabels = calculosPorCriterio.map((c, i) => {
       const angle = -Math.PI / 2 + i * angleStep;
-      const r = radius + 18;
-      return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle), text: c.nombre, nota: c.notaFinal };
+      const r = radius + 25;
+      const x = cx + r * Math.cos(angle);
+      const y = cy + r * Math.sin(angle);
+      const cosVal = Math.cos(angle);
+      const anchor = cosVal > 0.2 ? 'start' : cosVal < -0.2 ? 'end' : 'middle';
+      return { x, y, anchor, nota: c.notaFinal, lineas: nombresCortos[i] };
     });
 
     // Color decisión
@@ -612,17 +627,16 @@ ${obsComite || '[Sin observaciones registradas]'}
   .header-left h1 { font-size: 16pt; color: #0f172a; font-weight: 800; line-height: 1.15; margin-bottom: 2mm; max-width: 130mm; }
   .header-left .meta { font-size: 8pt; color: #64748b; }
   .header-left .meta strong { color: #1e293b; }
-  .badge-score { background: ${colorDecision}; color: white; padding: 5mm 7mm; border-radius: 8px; text-align: center; min-width: 35mm; }
-  .badge-score .score-num { font-size: 24pt; font-weight: 800; line-height: 1; }
-  .badge-score .score-total { font-size: 8pt; opacity: 0.85; margin-bottom: 2mm; }
-  .badge-score .score-label { font-size: 8pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1mm; }
+  .badge-score { background: ${colorDecision}; color: white; padding: 6mm 8mm; border-radius: 8px; text-align: center; min-width: 50mm; max-width: 65mm; display: flex; flex-direction: column; justify-content: center; }
+  .badge-score .score-label-top { font-size: 8pt; opacity: 0.9; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 2.5mm; font-weight: 600; }
+  .badge-score .score-label-main { font-size: 14pt; font-weight: 800; line-height: 1.15; }
 
   .grid-main { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; margin-bottom: 4mm; }
   .card { border: 1px solid #cbd5e1; border-radius: 6px; padding: 3mm 4mm; }
   .card-title { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #475569; margin-bottom: 2mm; border-bottom: 1px solid #e2e8f0; padding-bottom: 1.5mm; }
 
-  .radar-container { display: flex; align-items: center; justify-content: center; }
-  .radar-container svg { width: 100%; max-width: 75mm; height: auto; }
+  .radar-container { display: flex; align-items: center; justify-content: center; padding: 2mm 0; }
+  .radar-container svg { width: 100%; max-width: 95mm; height: auto; }
 
   .criteria-table { width: 100%; font-size: 8pt; border-collapse: collapse; }
   .criteria-table td { padding: 1.3mm 2mm; border-bottom: 1px solid #f1f5f9; }
@@ -681,28 +695,28 @@ ${obsComite || '[Sin observaciones registradas]'}
     </div>
   </div>
   <div class="badge-score">
-    <div class="score-num">${puntajeTotal.toFixed(0)}</div>
-    <div class="score-total">/ 100 puntos</div>
-    <div class="score-label">${decisionAjustada.texto}</div>
+    <div class="score-label-top">Decisión</div>
+    <div class="score-label-main">${decisionAjustada.texto}</div>
   </div>
 </div>
 
+${decisionAjustada.alerta ? `
 <div class="decisions-row">
   <div class="decision-box dec-puntaje">
-    <div class="decision-label">Decisión por puntaje</div>
+    <div class="decision-label">Decisión inicial (por evaluación)</div>
     <div class="decision-value">${decisionPuntaje.texto}</div>
   </div>
   <div class="decision-box dec-final">
-    <div class="decision-label">Decisión ajustada (con gating)</div>
+    <div class="decision-label">⚠ Decisión final (ajustada por gating)</div>
     <div class="decision-value">${decisionAjustada.texto}</div>
   </div>
-</div>
+</div>` : ''}
 
 <div class="grid-main">
   <div class="card">
     <div class="card-title">Perfil de evaluación</div>
     <div class="radar-container">
-      <svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+      <svg viewBox="0 0 440 400" xmlns="http://www.w3.org/2000/svg">
         <!-- Círculos de fondo -->
         ${[1,2,3,4,5].map(level => `<circle cx="${cx}" cy="${cy}" r="${(level/5)*radius}" fill="none" stroke="#e2e8f0" stroke-width="0.5"/>`).join('')}
         <!-- Líneas radiales -->
@@ -712,18 +726,21 @@ ${obsComite || '[Sin observaciones registradas]'}
           const y2 = cy + radius * Math.sin(angle);
           return `<line x1="${cx}" y1="${cy}" x2="${x2}" y2="${y2}" stroke="#e2e8f0" stroke-width="0.5"/>`;
         }).join('')}
+        <!-- Números de escala -->
+        ${[1,2,3,4,5].map(level => `<text x="${cx + 3}" y="${cy - (level/5)*radius + 3}" font-size="7" fill="#94a3b8">${level}</text>`).join('')}
         <!-- Polígono de valores -->
         <polygon points="${radarPolygon}" fill="${colorDecision}40" stroke="${colorDecision}" stroke-width="2"/>
         <!-- Puntos -->
-        ${radarPoints.map(p => `<circle cx="${p.x}" cy="${p.y}" r="3" fill="${colorDecision}"/>`).join('')}
-        <!-- Etiquetas -->
-        ${radarLabels.map((l, i) => {
-          const angle = -Math.PI / 2 + i * angleStep;
-          const isRight = Math.cos(angle) > 0.1;
-          const isLeft = Math.cos(angle) < -0.1;
-          const anchor = isRight ? 'start' : isLeft ? 'end' : 'middle';
-          const shortName = ['Alineación', 'Impacto', 'Madurez', 'Vinculación', 'Viabilidad', 'Factibilidad', 'Equipo'][i];
-          return `<text x="${l.x}" y="${l.y}" text-anchor="${anchor}" font-size="9" fill="#475569" font-weight="600">${shortName} (${l.nota})</text>`;
+        ${radarPoints.map(p => `<circle cx="${p.x}" cy="${p.y}" r="3.5" fill="${colorDecision}"/>`).join('')}
+        <!-- Etiquetas de criterios (en dos líneas) -->
+        ${radarLabels.map(l => {
+          const linea2y = l.lineas.length > 1 ? l.y + 11 : l.y;
+          const notaY = l.lineas.length > 1 ? l.y + 22 : l.y + 11;
+          return `
+            <text x="${l.x}" y="${l.y}" text-anchor="${l.anchor}" font-size="9.5" fill="#334155" font-weight="600">${l.lineas[0]}</text>
+            ${l.lineas[1] ? `<text x="${l.x}" y="${linea2y}" text-anchor="${l.anchor}" font-size="9.5" fill="#334155" font-weight="600">${l.lineas[1]}</text>` : ''}
+            <text x="${l.x}" y="${notaY}" text-anchor="${l.anchor}" font-size="10" fill="${colorDecision}" font-weight="700">Nota: ${l.nota}/5</text>
+          `;
         }).join('')}
       </svg>
     </div>
@@ -734,7 +751,7 @@ ${obsComite || '[Sin observaciones registradas]'}
     <table class="criteria-table">
       ${calculosPorCriterio.map(c => `
         <tr>
-          <td>${c.nombre}<br/><span class="weight">Peso ${c.peso}% · Ponderado ${c.puntajePonderado.toFixed(1)}</span></td>
+          <td>${c.nombre}<br/><span class="weight">Peso ${c.peso}%</span></td>
           <td class="nota-cell nota-${c.notaFinal}">${c.notaFinal}/5</td>
         </tr>
       `).join('')}
