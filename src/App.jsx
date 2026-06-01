@@ -548,25 +548,253 @@ ${obsComite || '[Sin observaciones registradas]'}
     URL.revokeObjectURL(url);
   };
 
-  const imprimirResumen = () => {
+  const generarOnePager = () => {
     const w = window.open('', '_blank');
     if (!w) return;
-    const resumen = generarResumen();
-    w.document.write(`
-      <html><head><title>Evaluación - ${infoGeneral.nombre}</title>
-      <style>
-        body { font-family: Helvetica, Arial, sans-serif; padding: 30px; color: #1e293b; }
-        h1 { color: #0f172a; border-bottom: 3px solid #f59e0b; padding-bottom: 8px; }
-        pre { white-space: pre-wrap; font-family: Helvetica, sans-serif; line-height: 1.6; font-size: 11pt; }
-        .header { margin-bottom: 20px; }
-        .meta { color: #64748b; font-size: 9pt; margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 10px; }
-      </style></head><body>
-      <div class="header"><h1>Evaluación Portafolio I+D</h1></div>
-      <pre>${resumen.replace(/</g, '&lt;')}</pre>
-      <div class="meta">Dirección de Desarrollo y Transferencia del Conocimiento · Universidad del Desarrollo</div>
-      <script>window.onload = () => window.print();</script>
-      </body></html>
-    `);
+
+    const evaluadoresTexto = infoGeneral.evaluadores.length > 0
+      ? infoGeneral.evaluadores.map(e => e === 'Otro' && infoGeneral.evaluadorOtro ? infoGeneral.evaluadorOtro : e).join(', ')
+      : 'No especificados';
+
+    const fortalezas = calculosPorCriterio.filter(c => c.notaFinal >= 4).map(c => c.nombre);
+    const brechas = calculosPorCriterio.filter(c => c.notaFinal <= 2).map(c => c.nombre);
+    const riesgosActivos = DIMENSIONES_GATING.filter(d => gating[d.id].nivel !== 'bajo');
+
+    const condicionesActivas = [];
+    if (condiciones.pi) condicionesActivas.push('Resolver aspectos de PI');
+    if (condiciones.validacion) condicionesActivas.push('Validación con actor(es) externo(s)');
+    if (condiciones.propVal) condicionesActivas.push('Ajuste de propuesta de valor');
+    if (condiciones.modAdop) condicionesActivas.push('Clarificar modelo de adopción');
+    if (condiciones.equipo) condicionesActivas.push('Fortalecer equipo');
+    if (condiciones.legal) condicionesActivas.push('Aspectos legales/regulatorios');
+    if (condiciones.etica) condicionesActivas.push('Aspectos éticos/compliance');
+    if (condiciones.otros && condiciones.otrosTexto) condicionesActivas.push(condiciones.otrosTexto);
+
+    const apoyos = [];
+    if (tipoApoyo.financiamiento) apoyos.push('Financiamiento');
+    if (tipoApoyo.vinculacion) apoyos.push('Vinculación');
+    if (tipoApoyo.validacion) apoyos.push('Validación');
+    if (tipoApoyo.roadmap) apoyos.push('Roadmap');
+    if (tipoApoyo.pi) apoyos.push('PI');
+    if (tipoApoyo.transferencia) apoyos.push('Transferencia/adopción');
+    if (tipoApoyo.externo) apoyos.push('Financiamiento externo');
+    if (tipoApoyo.otros && tipoApoyo.otrosTexto) apoyos.push(tipoApoyo.otrosTexto);
+
+    // Calcular puntos del radar chart
+    const cx = 150, cy = 150, radius = 110;
+    const angleStep = (2 * Math.PI) / 7;
+    const radarPoints = calculosPorCriterio.map((c, i) => {
+      const angle = -Math.PI / 2 + i * angleStep;
+      const r = (c.notaFinal / 5) * radius;
+      return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle), label: c.nombre.split(' ')[0], nota: c.notaFinal, angle };
+    });
+    const radarPolygon = radarPoints.map(p => `${p.x},${p.y}`).join(' ');
+
+    // Etiquetas en el radar
+    const radarLabels = calculosPorCriterio.map((c, i) => {
+      const angle = -Math.PI / 2 + i * angleStep;
+      const r = radius + 18;
+      return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle), text: c.nombre, nota: c.notaFinal };
+    });
+
+    // Color decisión
+    const colorDecision = decisionAjustada.color === 'emerald' ? '#10b981' :
+                          decisionAjustada.color === 'amber' ? '#f59e0b' :
+                          decisionAjustada.color === 'orange' ? '#fb923c' : '#ef4444';
+
+    w.document.write(`<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>One-Pager - ${infoGeneral.nombre}</title>
+<style>
+  @page { size: A4 portrait; margin: 10mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1e293b; font-size: 9pt; line-height: 1.35; padding: 8mm; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #f59e0b; padding-bottom: 4mm; margin-bottom: 4mm; }
+  .header-left h1 { font-size: 16pt; color: #0f172a; font-weight: 800; line-height: 1.15; margin-bottom: 2mm; max-width: 130mm; }
+  .header-left .meta { font-size: 8pt; color: #64748b; }
+  .header-left .meta strong { color: #1e293b; }
+  .badge-score { background: ${colorDecision}; color: white; padding: 5mm 7mm; border-radius: 8px; text-align: center; min-width: 35mm; }
+  .badge-score .score-num { font-size: 24pt; font-weight: 800; line-height: 1; }
+  .badge-score .score-total { font-size: 8pt; opacity: 0.85; margin-bottom: 2mm; }
+  .badge-score .score-label { font-size: 8pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1mm; }
+
+  .grid-main { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; margin-bottom: 4mm; }
+  .card { border: 1px solid #cbd5e1; border-radius: 6px; padding: 3mm 4mm; }
+  .card-title { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #475569; margin-bottom: 2mm; border-bottom: 1px solid #e2e8f0; padding-bottom: 1.5mm; }
+
+  .radar-container { display: flex; align-items: center; justify-content: center; }
+  .radar-container svg { width: 100%; max-width: 75mm; height: auto; }
+
+  .criteria-table { width: 100%; font-size: 8pt; border-collapse: collapse; }
+  .criteria-table td { padding: 1.3mm 2mm; border-bottom: 1px solid #f1f5f9; }
+  .criteria-table .nota-cell { text-align: center; font-weight: 700; width: 10mm; }
+  .nota-5 { color: #065f46; }
+  .nota-4 { color: #15803d; }
+  .nota-3 { color: #b45309; }
+  .nota-2, .nota-1 { color: #b91c1c; }
+  .weight { color: #94a3b8; font-size: 7pt; }
+
+  .decisions-row { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; margin-bottom: 4mm; }
+  .decision-box { padding: 3mm 4mm; border-radius: 6px; border-left: 4px solid; }
+  .dec-puntaje { background: #f1f5f9; border-color: #64748b; }
+  .dec-final { background: ${colorDecision}15; border-color: ${colorDecision}; }
+  .decision-label { font-size: 7pt; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; font-weight: 700; margin-bottom: 1mm; }
+  .decision-value { font-size: 10pt; font-weight: 700; color: #0f172a; }
+
+  .grid-bottom { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4mm; margin-bottom: 4mm; }
+  .list-item { font-size: 8.5pt; padding: 1mm 0; border-bottom: 1px dotted #e2e8f0; }
+  .list-item:last-child { border-bottom: none; }
+  .empty { color: #94a3b8; font-style: italic; font-size: 8pt; }
+
+  .gating-row { font-size: 8pt; display: flex; justify-content: space-between; padding: 1mm 0; border-bottom: 1px dotted #e2e8f0; }
+  .gating-row:last-child { border-bottom: none; }
+  .gating-status { font-weight: 700; }
+  .gating-bajo { color: #065f46; }
+  .gating-abordable { color: #b45309; }
+  .gating-critico { color: #b91c1c; }
+
+  .footer { border-top: 1px solid #e2e8f0; padding-top: 2.5mm; margin-top: 4mm; display: flex; justify-content: space-between; font-size: 7pt; color: #94a3b8; }
+
+  .tag { display: inline-block; background: #f1f5f9; padding: 1mm 2.5mm; border-radius: 10px; font-size: 7.5pt; margin: 0.5mm; }
+
+  .observaciones { font-size: 8pt; font-style: italic; color: #475569; line-height: 1.4; }
+
+  .no-print { background: #f1f5f9; padding: 3mm 5mm; margin: -8mm -8mm 4mm -8mm; display: flex; justify-content: space-between; align-items: center; }
+  .btn-print { background: #1e293b; color: white; border: none; padding: 2mm 5mm; border-radius: 4px; cursor: pointer; font-weight: 600; }
+  @media print { .no-print { display: none !important; } body { padding: 0; } }
+</style></head>
+<body>
+
+<div class="no-print">
+  <span style="font-size: 9pt;">📄 One-Pager de evaluación. Apreta el botón para guardar como PDF.</span>
+  <button class="btn-print" onclick="window.print()">Imprimir / Guardar PDF</button>
+</div>
+
+<div class="header">
+  <div class="header-left">
+    <h1>${infoGeneral.nombre || 'Proyecto sin nombre'}</h1>
+    <div class="meta">
+      <strong>PI:</strong> ${infoGeneral.pi || '—'} &nbsp;|&nbsp;
+      <strong>Facultad:</strong> ${infoGeneral.unidad || '—'} &nbsp;|&nbsp;
+      <strong>Estado:</strong> ${infoGeneral.estado || '—'}<br/>
+      <strong>Evaluadores:</strong> ${evaluadoresTexto} &nbsp;|&nbsp;
+      <strong>Fecha:</strong> ${infoGeneral.fecha || '—'}
+    </div>
+  </div>
+  <div class="badge-score">
+    <div class="score-num">${puntajeTotal.toFixed(0)}</div>
+    <div class="score-total">/ 100 puntos</div>
+    <div class="score-label">${decisionAjustada.texto}</div>
+  </div>
+</div>
+
+<div class="decisions-row">
+  <div class="decision-box dec-puntaje">
+    <div class="decision-label">Decisión por puntaje</div>
+    <div class="decision-value">${decisionPuntaje.texto}</div>
+  </div>
+  <div class="decision-box dec-final">
+    <div class="decision-label">Decisión ajustada (con gating)</div>
+    <div class="decision-value">${decisionAjustada.texto}</div>
+  </div>
+</div>
+
+<div class="grid-main">
+  <div class="card">
+    <div class="card-title">Perfil de evaluación</div>
+    <div class="radar-container">
+      <svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+        <!-- Círculos de fondo -->
+        ${[1,2,3,4,5].map(level => `<circle cx="${cx}" cy="${cy}" r="${(level/5)*radius}" fill="none" stroke="#e2e8f0" stroke-width="0.5"/>`).join('')}
+        <!-- Líneas radiales -->
+        ${calculosPorCriterio.map((c, i) => {
+          const angle = -Math.PI / 2 + i * angleStep;
+          const x2 = cx + radius * Math.cos(angle);
+          const y2 = cy + radius * Math.sin(angle);
+          return `<line x1="${cx}" y1="${cy}" x2="${x2}" y2="${y2}" stroke="#e2e8f0" stroke-width="0.5"/>`;
+        }).join('')}
+        <!-- Polígono de valores -->
+        <polygon points="${radarPolygon}" fill="${colorDecision}40" stroke="${colorDecision}" stroke-width="2"/>
+        <!-- Puntos -->
+        ${radarPoints.map(p => `<circle cx="${p.x}" cy="${p.y}" r="3" fill="${colorDecision}"/>`).join('')}
+        <!-- Etiquetas -->
+        ${radarLabels.map((l, i) => {
+          const angle = -Math.PI / 2 + i * angleStep;
+          const isRight = Math.cos(angle) > 0.1;
+          const isLeft = Math.cos(angle) < -0.1;
+          const anchor = isRight ? 'start' : isLeft ? 'end' : 'middle';
+          const shortName = ['Alineación', 'Impacto', 'Madurez', 'Vinculación', 'Viabilidad', 'Factibilidad', 'Equipo'][i];
+          return `<text x="${l.x}" y="${l.y}" text-anchor="${anchor}" font-size="9" fill="#475569" font-weight="600">${shortName} (${l.nota})</text>`;
+        }).join('')}
+      </svg>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Notas por criterio</div>
+    <table class="criteria-table">
+      ${calculosPorCriterio.map(c => `
+        <tr>
+          <td>${c.nombre}<br/><span class="weight">Peso ${c.peso}% · Ponderado ${c.puntajePonderado.toFixed(1)}</span></td>
+          <td class="nota-cell nota-${c.notaFinal}">${c.notaFinal}/5</td>
+        </tr>
+      `).join('')}
+    </table>
+  </div>
+</div>
+
+<div class="grid-bottom">
+  <div class="card">
+    <div class="card-title">✓ Fortalezas (nota ≥ 4)</div>
+    ${fortalezas.length > 0
+      ? fortalezas.map(f => `<div class="list-item">• ${f}</div>`).join('')
+      : '<div class="empty">Sin fortalezas destacadas</div>'}
+  </div>
+
+  <div class="card">
+    <div class="card-title">⚠ Brechas (nota ≤ 2)</div>
+    ${brechas.length > 0
+      ? brechas.map(b => `<div class="list-item">• ${b}</div>`).join('')
+      : '<div class="empty">Sin brechas críticas</div>'}
+  </div>
+
+  <div class="card">
+    <div class="card-title">🛡 Gating (riesgos habilitantes)</div>
+    ${DIMENSIONES_GATING.map(d => {
+      const nivel = gating[d.id].nivel;
+      const label = nivel === 'bajo' ? 'Bajo' : nivel === 'abordable' ? 'Abordable' : 'Crítico';
+      return `<div class="gating-row"><span>${d.nombre}</span><span class="gating-status gating-${nivel}">${label}</span></div>`;
+    }).join('')}
+  </div>
+</div>
+
+<div class="grid-main">
+  <div class="card">
+    <div class="card-title">📋 Condiciones recomendadas</div>
+    ${condicionesActivas.length > 0
+      ? condicionesActivas.map(c => `<span class="tag">${c}</span>`).join(' ')
+      : '<div class="empty">Sin condiciones específicas</div>'}
+  </div>
+
+  <div class="card">
+    <div class="card-title">💼 Apoyos sugeridos · Recursos: ${recursos || '—'}</div>
+    ${apoyos.length > 0
+      ? apoyos.map(a => `<span class="tag">${a}</span>`).join(' ')
+      : '<div class="empty">Sin apoyos definidos</div>'}
+  </div>
+</div>
+
+${obsComite ? `
+<div class="card" style="margin-bottom: 4mm;">
+  <div class="card-title">💬 Observaciones del comité</div>
+  <div class="observaciones">${obsComite.replace(/</g, '&lt;').replace(/\n/g, '<br/>')}</div>
+</div>` : ''}
+
+<div class="footer">
+  <span>Dirección de Desarrollo y Transferencia del Conocimiento · Universidad del Desarrollo</span>
+  <span>Generado el ${new Date().toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+</div>
+
+</body></html>`);
     w.document.close();
   };
 
@@ -1168,9 +1396,9 @@ ${obsComite || '[Sin observaciones registradas]'}
               className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded text-sm font-medium transition-colors">
               <Download size={16} /> Exportar a Excel
             </button>
-            <button onClick={imprimirResumen} disabled={!infoGeneral.nombre}
+            <button onClick={generarOnePager} disabled={!infoGeneral.nombre}
               className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded text-sm font-medium transition-colors">
-              <Printer size={16} /> Imprimir / PDF
+              <Printer size={16} /> One-pager visual (PDF)
             </button>
           </div>
           <p className="text-xs text-slate-500 mt-3">
