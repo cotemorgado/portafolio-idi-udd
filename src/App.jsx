@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, XCircle, Copy, FileText, Info, AlertCircle, Save, Download, Trash2, FolderOpen, Printer } from 'lucide-react';
 
-const EVALUADORES = ['María José', 'Daniela', 'Magali', 'Daniel', 'José', 'Otro'];
+const EVALUADORES = ['María José', 'Daniela', 'Magali', 'Daniel', 'José', 'Javiera', 'Otro'];
 
 const PROYECTOS = [
   { nombre: 'Generación de bobinas de papel con partículas de cobre (MCu)', facultad: 'Diseño', pi: 'Alejandra Amenabar, Paulina Contreras, Nataly Silva' },
@@ -355,10 +355,14 @@ export default function PortafolioIDi() {
       ? infoGeneral.evaluadores.map(e => e === 'Otro' && infoGeneral.evaluadorOtro ? infoGeneral.evaluadorOtro : e).join(', ')
       : '[No especificados]';
 
+    const nombreProyecto = infoGeneral.nombre === '__manual__'
+      ? (infoGeneral.nombreManual || '[Sin nombre]')
+      : (infoGeneral.nombre || '[Sin nombre]');
+
     return `RESUMEN EJECUTIVO — PORTAFOLIO I+D+i UDD
 ═══════════════════════════════════════════════
 
-Proyecto: ${infoGeneral.nombre || '[Sin nombre]'}
+Proyecto: ${nombreProyecto}
 Unidad / Facultad: ${infoGeneral.unidad || '[No especificada]'}
 Investigador/a Principal: ${infoGeneral.pi || '[No especificado]'}
 Estado: ${infoGeneral.estado || '[No especificado]'}
@@ -419,15 +423,16 @@ ${obsComite || '[Sin observaciones registradas]'}
   };
 
   const guardarEvaluacion = () => {
-    if (!infoGeneral.nombre) {
-      setMensajeGuardado('⚠️ Selecciona un proyecto antes de guardar');
+    const nombreProy = infoGeneral.nombre === '__manual__' ? infoGeneral.nombreManual : infoGeneral.nombre;
+    if (!nombreProy) {
+      setMensajeGuardado('⚠️ Selecciona o escribe un proyecto antes de guardar');
       setTimeout(() => setMensajeGuardado(''), 3000);
       return;
     }
     const nueva = {
       id: Date.now(),
       fechaGuardado: new Date().toLocaleString('es-CL'),
-      proyecto: infoGeneral.nombre,
+      proyecto: nombreProy,
       puntajeTotal: puntajeTotal.toFixed(1),
       decision: decisionAjustada.texto,
       data: { infoGeneral, evaluaciones, gating, decisionComite, obsComite, condiciones, recursos, tipoApoyo }
@@ -556,6 +561,10 @@ ${obsComite || '[Sin observaciones registradas]'}
     const evaluadoresTexto = infoGeneral.evaluadores.length > 0
       ? infoGeneral.evaluadores.map(e => e === 'Otro' && infoGeneral.evaluadorOtro ? infoGeneral.evaluadorOtro : e).join(', ')
       : 'No especificados';
+
+    const nombreProyecto = infoGeneral.nombre === '__manual__'
+      ? (infoGeneral.nombreManual || 'Proyecto sin nombre')
+      : (infoGeneral.nombre || 'Proyecto sin nombre');
 
     const fortalezas = calculosPorCriterio.filter(c => c.notaFinal >= 4).map(c => c.nombre);
     const brechas = calculosPorCriterio.filter(c => c.notaFinal <= 2).map(c => c.nombre);
@@ -686,7 +695,7 @@ ${obsComite || '[Sin observaciones registradas]'}
 
 <div class="header">
   <div class="header-left">
-    <h1>${infoGeneral.nombre || 'Proyecto sin nombre'}</h1>
+    <h1>${nombreProyecto}</h1>
     <div class="meta">
       <strong>PI:</strong> ${infoGeneral.pi || '—'} &nbsp;|&nbsp;
       <strong>Facultad:</strong> ${infoGeneral.unidad || '—'} &nbsp;|&nbsp;
@@ -915,28 +924,45 @@ ${obsComite ? `
             <div className="bg-white border border-slate-200 rounded-b-lg p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Nombre del proyecto</label>
-                <select value={infoGeneral.nombre} onChange={e => {
-                    const proy = PROYECTOS.find(p => p.nombre === e.target.value);
-                    setInfoGeneral({
-                      ...infoGeneral,
-                      nombre: e.target.value,
-                      unidad: proy ? proy.facultad : infoGeneral.unidad,
-                      pi: proy ? proy.pi : infoGeneral.pi
-                    });
+                <select value={infoGeneral.nombre === '__manual__' ? '__manual__' : infoGeneral.nombre} onChange={e => {
+                    const valor = e.target.value;
+                    if (valor === '__manual__') {
+                      setInfoGeneral({ ...infoGeneral, nombre: '__manual__', unidad: '', pi: '' });
+                    } else {
+                      const proy = PROYECTOS.find(p => p.nombre === valor);
+                      setInfoGeneral({
+                        ...infoGeneral,
+                        nombre: valor,
+                        unidad: proy ? proy.facultad : infoGeneral.unidad,
+                        pi: proy ? proy.pi : infoGeneral.pi
+                      });
+                    }
                   }}
                   className="w-full border border-slate-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-slate-400">
                   <option value="">Seleccionar proyecto…</option>
                   {PROYECTOS.map((p, i) => <option key={i} value={p.nombre}>{i + 1}. {p.nombre}</option>)}
+                  <option value="__manual__">➕ Otro proyecto (ingresar manualmente)</option>
                 </select>
+                {infoGeneral.nombre === '__manual__' && (
+                  <input
+                    type="text"
+                    value={infoGeneral.nombreManual || ''}
+                    onChange={e => setInfoGeneral({...infoGeneral, nombreManual: e.target.value})}
+                    placeholder="Escribir el nombre del proyecto…"
+                    className="mt-2 w-full border border-slate-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  />
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Unidad(es) / Facultad(es)</label>
                 <input type="text" value={infoGeneral.unidad} onChange={e => setInfoGeneral({...infoGeneral, unidad: e.target.value})}
+                  placeholder={infoGeneral.nombre === '__manual__' ? 'Escribir facultad o unidad…' : ''}
                   className="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Investigador/a principal</label>
                 <input type="text" value={infoGeneral.pi} onChange={e => setInfoGeneral({...infoGeneral, pi: e.target.value})}
+                  placeholder={infoGeneral.nombre === '__manual__' ? 'Escribir nombre del investigador principal…' : ''}
                   className="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400" />
               </div>
               <div>
