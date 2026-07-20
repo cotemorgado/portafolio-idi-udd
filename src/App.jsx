@@ -219,12 +219,16 @@ export default function PortafolioIDi() {
   const [evaluacionesGuardadas, setEvaluacionesGuardadas] = useState([]);
   const [mostrarGuardadas, setMostrarGuardadas] = useState(false);
   const [mensajeGuardado, setMensajeGuardado] = useState('');
+  const [proyectosPersonalizados, setProyectosPersonalizados] = useState([]);
 
-  // Cargar evaluaciones guardadas y borrador al iniciar
+  // Cargar evaluaciones guardadas, proyectos personalizados y borrador al iniciar
   useEffect(() => {
     try {
       const guardadas = localStorage.getItem('udd_evaluaciones_guardadas');
       if (guardadas) setEvaluacionesGuardadas(JSON.parse(guardadas));
+
+      const custom = localStorage.getItem('udd_proyectos_personalizados');
+      if (custom) setProyectosPersonalizados(JSON.parse(custom));
 
       const borrador = localStorage.getItem('udd_borrador_actual');
       if (borrador) {
@@ -242,6 +246,9 @@ export default function PortafolioIDi() {
       console.error('Error cargando datos', e);
     }
   }, []);
+
+  // Lista combinada de proyectos oficiales + personalizados
+  const proyectosTodos = useMemo(() => [...PROYECTOS, ...proyectosPersonalizados], [proyectosPersonalizados]);
 
   // Autoguardado del borrador actual
   useEffect(() => {
@@ -423,12 +430,30 @@ ${obsComite || '[Sin observaciones registradas]'}
   };
 
   const guardarEvaluacion = () => {
-    const nombreProy = infoGeneral.nombre === '__manual__' ? infoGeneral.nombreManual : infoGeneral.nombre;
+    const esManual = infoGeneral.nombre === '__manual__';
+    const nombreProy = esManual ? infoGeneral.nombreManual : infoGeneral.nombre;
     if (!nombreProy) {
       setMensajeGuardado('⚠️ Selecciona o escribe un proyecto antes de guardar');
       setTimeout(() => setMensajeGuardado(''), 3000);
       return;
     }
+
+    // Si es un proyecto manual, agregarlo a la lista de proyectos personalizados
+    if (esManual) {
+      const yaExiste = proyectosTodos.some(p => p.nombre.trim().toLowerCase() === nombreProy.trim().toLowerCase());
+      if (!yaExiste) {
+        const nuevoProy = {
+          nombre: nombreProy.trim(),
+          facultad: infoGeneral.unidad || '',
+          pi: infoGeneral.pi || '',
+          personalizado: true
+        };
+        const actualizados = [...proyectosPersonalizados, nuevoProy];
+        setProyectosPersonalizados(actualizados);
+        localStorage.setItem('udd_proyectos_personalizados', JSON.stringify(actualizados));
+      }
+    }
+
     const nueva = {
       id: Date.now(),
       fechaGuardado: new Date().toLocaleString('es-CL'),
@@ -440,8 +465,8 @@ ${obsComite || '[Sin observaciones registradas]'}
     const actualizadas = [nueva, ...evaluacionesGuardadas];
     setEvaluacionesGuardadas(actualizadas);
     localStorage.setItem('udd_evaluaciones_guardadas', JSON.stringify(actualizadas));
-    setMensajeGuardado('✓ Evaluación guardada correctamente');
-    setTimeout(() => setMensajeGuardado(''), 3000);
+    setMensajeGuardado(esManual ? '✓ Evaluación guardada · proyecto agregado al desplegable' : '✓ Evaluación guardada correctamente');
+    setTimeout(() => setMensajeGuardado(''), 3500);
   };
 
   const cargarEvaluacion = (id) => {
@@ -929,7 +954,7 @@ ${obsComite ? `
                     if (valor === '__manual__') {
                       setInfoGeneral({ ...infoGeneral, nombre: '__manual__', unidad: '', pi: '' });
                     } else {
-                      const proy = PROYECTOS.find(p => p.nombre === valor);
+                      const proy = proyectosTodos.find(p => p.nombre === valor);
                       setInfoGeneral({
                         ...infoGeneral,
                         nombre: valor,
@@ -940,7 +965,14 @@ ${obsComite ? `
                   }}
                   className="w-full border border-slate-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-slate-400">
                   <option value="">Seleccionar proyecto…</option>
-                  {PROYECTOS.map((p, i) => <option key={i} value={p.nombre}>{i + 1}. {p.nombre}</option>)}
+                  <optgroup label="Portafolio 2026">
+                    {PROYECTOS.map((p, i) => <option key={`o-${i}`} value={p.nombre}>{i + 1}. {p.nombre}</option>)}
+                  </optgroup>
+                  {proyectosPersonalizados.length > 0 && (
+                    <optgroup label="Proyectos agregados manualmente">
+                      {proyectosPersonalizados.map((p, i) => <option key={`p-${i}`} value={p.nombre}>{p.nombre}</option>)}
+                    </optgroup>
+                  )}
                   <option value="__manual__">➕ Otro proyecto (ingresar manualmente)</option>
                 </select>
                 {infoGeneral.nombre === '__manual__' && (
